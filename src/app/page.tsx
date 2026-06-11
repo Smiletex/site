@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import BrandsMarquee from "@/components/BrandsMarquee";
-import TrustBadge from "@/components/TrustBadge";
-import TechniquesMarquage from "@/components/TechniquesMarquage";
-import Hero from "@/components/Acceuil/Hero";
-import ProductCategories from "@/components/Acceuil/ProductCategories";
-import WhyChooseUs from "@/components/Acceuil/WhyChooseUs";
-import Inspiration from "@/components/Acceuil/Inspiration";
-import Testimonials from "@/components/Acceuil/Testimonials";
-import ProjectStepsSection from "@/components/Acceuil/ProjectStepsSection";
-import UrgentQuoteSection from "@/components/Acceuil/UrgentQuoteSection";
+import BrandsMarquee from "@/components/home/BrandsMarquee";
+import TrustBadge from "@/components/home/TrustBadge";
+import TechniquesMarquage from "@/components/home/TechniquesMarquage";
+import Hero from "@/components/home/Hero";
+import ProductCategories from "@/components/home/ProductCategories";
+import WhyChooseUs from "@/components/home/WhyChooseUs";
+import Inspiration from "@/components/home/Inspiration";
+import Testimonials from "@/components/home/Testimonials";
+import ProjectStepsSection from "@/components/home/ProjectStepsSection";
+import UrgentQuoteSection from "@/components/home/UrgentQuoteSection";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 

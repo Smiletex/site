@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useCartContext } from '@/components/CartProvider';
+import { useCartContext } from '@/components/cart/CartProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCategories, CategoryWithChildren } from '@/hooks/useProducts';
 import { FaLeaf } from 'react-icons/fa';
-import CartCounter from '@/components/CartCounter';
+import CartCounter from '@/components/cart/CartCounter';
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
