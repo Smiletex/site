@@ -192,3 +192,18 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
 1. Exécuter db/migrations/001_decrement_variant_stock.sql dans le SQL Editor Supabase.
 2. Configurer le webhook Stripe (endpoint /api/webhook) et renseigner STRIPE_WEBHOOK_SECRET, en écoutant : checkout.session.completed, checkout.session.expired, payment_intent.payment_failed.
 3. Triggers dormants : before_order_confirmation / on_order_confirmation (transition pending->confirmed) ne sont plus utilisés et n'interfèrent pas. À supprimer proprement lors d'une passe DB ultérieure.
+
+### Étape 5a — Authentification admin (B4, B5, B6)
+- Session admin signée (JWT HS256, cookie httpOnly) vérifiée côté serveur ; fin du `Bearer Admin123` en dur dans le bundle client et du cookie `admin_auth=true` non vérifié.
+- Middleware = gate unique pour `/admin/*` et `/api/admin/*` (login exclu).
+- Login sans identifiant par défaut + route de logout.
+- B6 : routes `force-delete` et `schema` (exec_sql / SQL arbitraire) supprimées. Suppression produit sûre (refus si déjà commandé, jamais de suppression d'order_items).
+- Nouvelle variable d'env : `ADMIN_SESSION_SECRET`.
+
+#### Actions requises côté client
+1. Ajouter `ADMIN_SESSION_SECRET` (>= 32 caractères, ex. `openssl rand -hex 32`) dans `.env.local` ET dans les variables d'env de prod (Vercel).
+2. S'assurer que `ADMIN_USERNAME` / `ADMIN_PASSWORD` sont définis avec un mot de passe fort (plus aucun défaut `admin/admin123`).
+3. L'admin se connecte désormais via /admin/login (cookie de session signé).
+
+#### Reste sur la sécurité
+- B3 (RLS Supabase) : NON traité ici. Les pages admin lisent encore des données via le client anon (clé publique). Tant que la RLS n'est pas activée, les données restent lisibles avec la seule clé anon. C'est l'étape 5b, la plus délicate.
