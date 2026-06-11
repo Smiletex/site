@@ -209,7 +209,7 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
 - B3 (RLS Supabase) : NON traité ici. Les pages admin lisent encore des données via le client anon (clé publique). Tant que la RLS n'est pas activée, les données restent lisibles avec la seule clé anon. C'est l'étape 5b, la plus délicate.
 
 ### Étape 5b — RLS Supabase, Phase 1 : données personnelles (B3)
-- RLS activée sur orders, order_items, customer_profiles, saved_designs (migration db/migrations/002).
+- RLS activée sur orders, order_items, customer_profiles (migration db/migrations/002). NB : saved_designs n'existe pas dans la base réelle (db/database.sql).
 - Client connecté = accès à ses propres données via auth.uid() ; rôle anon = aucun accès (fin de la fuite RGPD via la clé publique) ; serveur = service_role (bypass).
 - Pages admin orders et customers déplacées vers des routes serveur (/api/admin/orders, /api/admin/customers) car l'admin n'est pas un utilisateur Supabase.
 

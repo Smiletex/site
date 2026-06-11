@@ -1,6 +1,6 @@
 -- Migration 002 : Row Level Security sur les données personnelles (B3, Phase 1).
 --
--- Tables protégées : orders, order_items, customer_profiles, saved_designs.
+-- Tables protégées : orders, order_items, customer_profiles.
 -- Principe :
 --   - le service_role (routes serveur : checkout, webhook, routes admin) BYPASSE
 --     la RLS, donc le serveur garde un accès complet ;
@@ -13,7 +13,6 @@
 alter table orders            enable row level security;
 alter table order_items       enable row level security;
 alter table customer_profiles enable row level security;
-alter table saved_designs     enable row level security;
 
 -- orders : lecture de ses propres commandes uniquement.
 drop policy if exists orders_select_own on orders;
@@ -50,17 +49,9 @@ create policy profiles_update_own on customer_profiles
   using (id = auth.uid())
   with check (id = auth.uid());
 
--- saved_designs : chaque client gère ses propres designs.
-drop policy if exists designs_all_own on saved_designs;
-create policy designs_all_own on saved_designs
-  for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
 -- ---------------------------------------------------------------------------
 -- ROLLBACK (si besoin de revenir en arrière) :
 --   alter table orders            disable row level security;
 --   alter table order_items       disable row level security;
 --   alter table customer_profiles disable row level security;
---   alter table saved_designs     disable row level security;
 -- ---------------------------------------------------------------------------
