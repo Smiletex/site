@@ -207,3 +207,21 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
 
 #### Reste sur la sécurité
 - B3 (RLS Supabase) : NON traité ici. Les pages admin lisent encore des données via le client anon (clé publique). Tant que la RLS n'est pas activée, les données restent lisibles avec la seule clé anon. C'est l'étape 5b, la plus délicate.
+
+### Étape 5b — RLS Supabase, Phase 1 : données personnelles (B3)
+- RLS activée sur orders, order_items, customer_profiles, saved_designs (migration db/migrations/002).
+- Client connecté = accès à ses propres données via auth.uid() ; rôle anon = aucun accès (fin de la fuite RGPD via la clé publique) ; serveur = service_role (bypass).
+- Pages admin orders et customers déplacées vers des routes serveur (/api/admin/orders, /api/admin/customers) car l'admin n'est pas un utilisateur Supabase.
+
+#### Actions requises côté client
+1. Exécuter db/migrations/002_rls_donnees_personnelles.sql dans le SQL Editor Supabase.
+2. Tester APRÈS migration (points de rupture potentiels) :
+   - espace client /account : le client voit bien SES commandes ;
+   - inscription / mise à jour de profil (register, AuthModal) fonctionnent ;
+   - admin /orders et /admin/customers s'affichent et la MAJ de statut/profil marche.
+   - Rollback fourni en bas de la migration en cas de souci.
+
+### RLS Phase 2 (à planifier) : catalogue + paniers
+- Tables catalogue (products, product_variants, product_images, categories, inspirations) : activer RLS avec lecture publique (anon SELECT) + écritures réservées au serveur. Implique de déplacer les écritures catalogue d'adminService.ts (actuellement via client anon dans le navigateur admin) vers des routes serveur service_role.
+- carts / cart_items : définir une stratégie (invité vs connecté) avant d'activer la RLS (écritures actuelles via client anon dans lib/cart.ts).
+- Risque : moyen (données catalogue publiques) ; à faire avant un passage à l'échelle.
