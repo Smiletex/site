@@ -36,12 +36,8 @@ export default function EditProductPage({ params }: EditProductPageProps) {
         const categoriesData = await fetchCategories();
         setCategories(categoriesData);
         
-        // Charger le produit
-        const response = await fetch(`/api/admin/products/${id}`, {
-          headers: {
-            'Authorization': `Bearer Admin123`, // Utiliser le mot de passe admin défini dans .env.local
-          },
-        });
+        // Charger le produit (authentifié via la session admin / cookie).
+        const response = await fetch(`/api/admin/products/${id}`);
         
         if (!response.ok) {
           const errorData = await response.text();

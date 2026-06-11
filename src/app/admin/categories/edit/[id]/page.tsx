@@ -58,12 +58,8 @@ export default function EditCategoryPage({ params }: EditCategoryPageProps) {
         const filteredCategories = allCategories.filter(cat => cat.id !== id);
         setParentCategories(filteredCategories);
         
-        // Charger les détails de la catégorie à modifier
-        const response = await fetch(`/api/admin/categories/${id}`, {
-          headers: {
-            'Authorization': `Bearer Admin123`,
-          },
-        });
+        // Charger les détails de la catégorie (authentifié via la session admin / cookie).
+        const response = await fetch(`/api/admin/categories/${id}`);
         
         if (!response.ok) {
           const errorData = await response.text();

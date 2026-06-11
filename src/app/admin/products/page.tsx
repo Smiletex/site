@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Product } from '@/types/products';
 import { fetchAllProducts } from '@/lib/supabase/services/productService';
-import { deleteProduct } from '@/lib/supabase/services/adminService';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,65 +66,20 @@ export default function AdminProductsPage() {
 
     try {
       setLoading(true);
-      setError(null); // Réinitialiser les erreurs précédentes
-      
-      console.log(`Tentative de suppression du produit avec l'ID: ${id}`);
-      
-      // D'abord, s'assurer que les fonctions de suppression forcée sont disponibles
-      try {
-        const setupResponse = await fetch('/api/admin/products/force-delete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer Admin123`, // Utiliser le mot de passe admin défini dans .env.local
-          },
-        });
-        
-        if (!setupResponse.ok) {
-          console.warn('Erreur lors de la création des fonctions de suppression forcée:', await setupResponse.text());
-          // Continuer quand même
-        }
-      } catch (setupErr) {
-        console.warn('Exception lors de la création des fonctions de suppression forcée:', setupErr);
-        // Continuer quand même
-      }
-      
-      // Essayer d'abord avec l'API sécurisée
-      try {
-        const response = await fetch('/api/admin/products/delete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer Admin123`, // Utiliser le mot de passe admin défini dans .env.local
-          },
-          body: JSON.stringify({ id }),
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-          console.log(`Produit ${id} supprimé avec succès via l'API`);
-          // Recharger la liste des produits
-          await loadProducts();
-          return;
-        } else {
-          console.warn(`L'API a échoué avec l'erreur: ${data.error || 'Inconnue'}. Tentative avec la méthode de secours.`);
-        }
-      } catch (apiErr) {
-        console.warn(`Erreur lors de l'appel à l'API de suppression:`, apiErr);
-        // Continuer avec la méthode de secours
-      }
-      
-      // Méthode de secours: utiliser la fonction directe
-      const success = await deleteProduct(id);
-      
-      if (success) {
-        console.log(`Produit ${id} supprimé avec succès via la méthode directe`);
-        // Recharger la liste des produits
+      setError(null);
+
+      // La session admin (cookie) authentifie la requête côté serveur.
+      const response = await fetch('/api/admin/products/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         await loadProducts();
       } else {
-        console.error(`Échec de la suppression du produit ${id} - Toutes les méthodes ont échoué`);
-        setError('Erreur lors de la suppression du produit. Veuillez réessayer ou contacter l\'administrateur.');
+        setError(data.error || 'Erreur lors de la suppression du produit.');
       }
     } catch (err) {
       console.error(`Exception lors de la suppression du produit ${id}:`, err);
