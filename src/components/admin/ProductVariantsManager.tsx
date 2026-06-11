@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ProductVariant, ProductImage } from '@/lib/products';
+import { ProductVariant, ProductImage } from '@/types/products';
 import { uploadProductImage, addProductImage, deleteProductImage, setVariantPrimaryImage, updateProductVariant, addProductVariant, deleteProductVariant } from '@/lib/supabase/services/adminService';
 
 interface ProductVariantsManagerProps {

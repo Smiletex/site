@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Category } from '@/lib/products';
+import { Category } from '@/types/products';
 import { parseExcelFile, importProducts, ImportConfig, ImportProgress, extractManufacturers } from './services/importService';
 
 // Types

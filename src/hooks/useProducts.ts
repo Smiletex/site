@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Product, ProductVariant, Category, ProductImage } from '@/lib/products';
+import { Product, ProductVariant, Category, ProductImage } from '@/types/products';
 import * as productService from '@/lib/supabase/services/productService';
 
 // Interface étendue pour les produits avec image principale
