@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { CustomerProfile } from '@/lib/supabase/services/userService';
 import { toast } from 'react-hot-toast';
@@ -25,26 +24,15 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      
-      // Récupérer tous les profils clients
-      const { data: profiles, error: profilesError } = await supabase
-        .from('customer_profiles')
-        .select('*');
 
-      if (profilesError) throw profilesError;
-      
-      // Nous ne pouvons pas récupérer directement les emails depuis le client
-      // Nous allons donc simplement utiliser les profils tels quels
-      // Dans une implémentation complète, il faudrait créer une API route sécurisée
-      const customersWithEmail = (profiles || []).map(profile => {
-        return {
-          ...profile,
-          // L'email n'est pas directement accessible ici pour des raisons de sécurité
-          email: undefined
-        };
-      });
+      const res = await fetch('/api/admin/customers');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur de chargement des clients');
 
-      setCustomers(customersWithEmail);
+      setCustomers((data.customers || []).map((profile: CustomerWithEmail) => ({
+        ...profile,
+        email: undefined,
+      })));
     } catch (error) {
       console.error('Erreur lors de la récupération des clients:', error);
     } finally {
@@ -382,10 +370,12 @@ export default function CustomersPage() {
                       if (!editedCustomer) return;
                       
                       try {
-                        // Mettre à jour le profil client dans Supabase
-                        const { error } = await supabase
-                          .from('customer_profiles')
-                          .update({
+                        // Mise à jour via la route admin serveur (service_role).
+                        const res = await fetch('/api/admin/customers', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            id: editedCustomer.id,
                             first_name: editedCustomer.first_name,
                             last_name: editedCustomer.last_name,
                             phone: editedCustomer.phone,
@@ -394,12 +384,10 @@ export default function CustomersPage() {
                             city: editedCustomer.city,
                             postal_code: editedCustomer.postal_code,
                             country: editedCustomer.country,
-                            updated_at: new Date().toISOString()
-                          })
-                          .eq('id', editedCustomer.id);
-                          
-                        if (error) throw error;
-                        
+                          }),
+                        });
+                        if (!res.ok) throw new Error('Erreur de mise à jour');
+
                         // Mettre à jour l'état local
                         setCustomers(customers.map(c => 
                           c.id === editedCustomer.id ? editedCustomer : c
@@ -445,19 +433,10 @@ function CustomerOrders({ customerId }: { customerId: string }) {
   const fetchCustomerOrders = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          created_at,
-          status,
-          total_amount
-        `)
-        .eq('user_id', customerId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setOrders(data || []);
+      const res = await fetch(`/api/admin/orders?userId=${encodeURIComponent(customerId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur');
+      setOrders(data.orders || []);
     } catch (error) {
       console.error('Erreur lors de la récupération des commandes:', error);
     } finally {

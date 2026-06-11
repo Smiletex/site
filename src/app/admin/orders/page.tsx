@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import StatusSelector from '@/components/admin/StatusSelector';
 
 interface CustomerProfile {
@@ -92,42 +91,10 @@ export default function OrdersPage() {
 
   const fetchOrders = async () => {
     try {
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          items:order_items (
-            id,
-            quantity,
-            price_per_unit,
-            customization_data,
-            product:products (
-              name,
-              image_url
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      // Récupérer les profils clients pour chaque commande
-      const ordersWithProfiles = await Promise.all((orders || []).map(async (order) => {
-        if (order.user_id) {
-          const { data: profile, error: profileError } = await supabase
-            .from('customer_profiles')
-            .select('*')
-            .eq('id', order.user_id)
-            .single();
-          
-          if (!profileError && profile) {
-            return { ...order, customer_profile: profile };
-          }
-        }
-        return order;
-      }));
-      
-      setOrders(ordersWithProfiles || []);
+      const res = await fetch('/api/admin/orders');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur de chargement des commandes');
+      setOrders(data.orders || []);
     } catch (error) {
       console.error('Erreur lors de la récupération des commandes:', error);
     } finally {
@@ -137,14 +104,12 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', orderId);
-
-      if (error) throw error;
-      
-      // Rafraîchir les commandes
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Erreur de mise à jour du statut');
       fetchOrders();
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error);
