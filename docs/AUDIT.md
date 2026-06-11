@@ -225,3 +225,15 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
 - Tables catalogue (products, product_variants, product_images, categories, inspirations) : activer RLS avec lecture publique (anon SELECT) + écritures réservées au serveur. Implique de déplacer les écritures catalogue d'adminService.ts (actuellement via client anon dans le navigateur admin) vers des routes serveur service_role.
 - carts / cart_items : définir une stratégie (invité vs connecté) avant d'activer la RLS (écritures actuelles via client anon dans lib/cart.ts).
 - Risque : moyen (données catalogue publiques) ; à faire avant un passage à l'échelle.
+
+### Étape 6 — Fiabilité panier (bloc Élevés)
+- E1 : panier unifié en source unique (CartProvider). Id d'article stable (config + hash perso), fusion correcte, mises à jour immuables, fin de Date.now()/setTimeout/reload/polling. Suppression de hooks/useCart.ts et lib/cart.ts (ancien système + sync Supabase du panier).
+- E4 : correction de la race condition sur le prix de perso à l'ajout (utilisation de l'argument price, pas de l'état périmé).
+- E2 : images de perso envoyées vers Supabase Storage (route POST /api/uploads validée : PNG/JPEG/WebP, 5 Mo) au lieu du base64 en localStorage/base. Corrige aussi la validation d'upload (E6) pour le chemin client.
+
+#### Action requise côté client
+- Créer un bucket Storage PUBLIC nommé `customizations` dans Supabase (sinon l'upload d'image de perso échouera).
+
+#### Reste du bloc Élevés (à planifier)
+- E7 : devenu sans objet pour l'instant (le panier serveur n'est plus synchronisé ; le panier est local + commande créée au checkout). À reprendre si on remet un panier serveur multi-appareils.
+- E5 (IDOR lecture commande par session), E6 (validation upload admin) : partiellement adressés ; à finaliser.
