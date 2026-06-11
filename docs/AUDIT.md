@@ -167,9 +167,13 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
 - SQL consolidé : `src/database/orders.sql` → `db/` ; dossier `src/database/` supprimé.
 - Docs regroupées dans `docs/` (`AI_INSTRUCTIONS.md`, `CHECKOUT_INTEGRATION.md`, `AUDIT.md`) ; `README.md` reste à la racine.
 
-## Dette technique repérée pendant le rangement (à traiter petit à petit)
+### Étape 3 — Consolidation des types (duplication résolue)
+- `src/types/index.ts` et `src/types/order.ts` étaient **morts** (importés nulle part) : c'est ce qui créait les doublons `Product`/`Order`. Supprimés.
+- `src/lib/products.ts` (devenu un pur fichier de types) déplacé en `src/types/products.ts` ; les 19 imports `@/lib/products` mis à jour vers `@/types/products`.
+- Résultat : `src/types/` est la source unique de vérité (`cart.ts`, `customization.ts`, `products.ts`).
 
-- **Duplication de types** : `Product`, `ProductVariant`, `Category` sont définis À LA FOIS dans `src/lib/products.ts` ET `src/types/index.ts`. `Order`/`OrderItem` sont dupliqués entre `src/types/index.ts` et `src/types/order.ts`. Risque d'incohérence selon le fichier importé. À fusionner en une source unique (de préférence `src/types/`).
+## Dette technique restante (à traiter petit à petit)
+
 - **Erreurs TypeScript pré-existantes** masquées par `ignoreBuildErrors: true` dans `next.config.ts` :
   - API async Next 15 : `cookies()` et `params` utilisés en synchrone (`api/admin/login/route.ts`, routes `[id]`).
   - Types `null`/`undefined` mal gérés dans `products/[id]/ProductDetail.tsx` (couleur de variante).

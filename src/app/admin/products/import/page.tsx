@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Category } from '@/lib/products';
+import { Category } from '@/types/products';
 import { fetchCategories } from '@/lib/supabase/services/productService';
 import { ImportProgress } from './components/sologroup/services/importService';
 import SoloGroupImport from './components/sologroup/SoloGroupImport';

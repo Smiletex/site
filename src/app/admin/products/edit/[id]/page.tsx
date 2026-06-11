@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Product, Category } from '@/lib/products';
+import { Product, Category } from '@/types/products';
 import { fetchCategories } from '@/lib/supabase/services/productService';
 import { updateProduct, uploadProductImage } from '@/lib/supabase/services/adminService';
 import ProductForm from '@/components/admin/ProductForm';

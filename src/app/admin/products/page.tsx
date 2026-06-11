@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Product } from '@/lib/products';
+import { Product } from '@/types/products';
 import { fetchAllProducts } from '@/lib/supabase/services/productService';
 import { deleteProduct } from '@/lib/supabase/services/adminService';
 

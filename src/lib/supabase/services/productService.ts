@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { Product, ProductVariant, Category, ProductImage } from '@/lib/products';
+import { Product, ProductVariant, Category, ProductImage } from '@/types/products';
 
 export async function fetchAllProducts(): Promise<Product[]> {
   // Récupérer tous les produits

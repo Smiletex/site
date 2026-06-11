@@ -9,7 +9,7 @@ import { useCartContext } from '@/components/cart/CartProvider';
 import ProductCustomizer from '@/components/product/ProductCustomizer';
 import ProductGallery from '@/components/product/ProductGallery';
 import { ProductCustomization } from '@/types/customization';
-import { Product, ProductImage } from '@/lib/products';
+import { Product, ProductImage } from '@/types/products';
 import { isCustomizationComplete } from '@/lib/customization';
 import ProjectSteps from '@/components/product/ProjectSteps';
 

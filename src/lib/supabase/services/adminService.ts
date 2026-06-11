@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { Product, ProductVariant, Category, ProductImage } from '@/lib/products';
+import { Product, ProductVariant, Category, ProductImage } from '@/types/products';
 
 /**
  * Ajoute un nouveau produit dans la base de données

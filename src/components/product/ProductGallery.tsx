@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ProductImage } from '@/lib/products';
+import { ProductImage } from '@/types/products';
 
 interface ProductGalleryProps {
   images?: ProductImage[];

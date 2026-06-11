@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { ProductImage } from '@/lib/products';
+import { ProductImage } from '@/types/products';
 import { uploadProductImage, addProductImage, deleteProductImage, setProductPrimaryImage, updateProductImagesOrder } from '@/lib/supabase/services/adminService';
 
 interface ProductImagesManagerProps {

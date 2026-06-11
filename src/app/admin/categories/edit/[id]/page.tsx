@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Category } from '@/lib/products';
+import { Category } from '@/types/products';
 import { fetchCategories } from '@/lib/supabase/services/productService';
 import { updateCategory, uploadProductImage } from '@/lib/supabase/services/adminService';
 

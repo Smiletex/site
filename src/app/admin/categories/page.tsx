@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Category } from '@/lib/products';
+import { Category } from '@/types/products';
 import { fetchCategories } from '@/lib/supabase/services/productService';
 import { deleteCategory } from '@/lib/supabase/services/adminService';
 

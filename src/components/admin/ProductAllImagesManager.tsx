@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ProductImage, ProductVariant } from '@/lib/products';
+import { ProductImage, ProductVariant } from '@/types/products';
 import { uploadProductImage, addProductImage, deleteProductImage, setProductPrimaryImage, setVariantPrimaryImage, replaceProductImage } from '@/lib/supabase/services/adminService';
 import { supabase } from '@/lib/supabase/client';
 
