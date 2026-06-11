@@ -5,13 +5,13 @@ import Link from 'next/link';
 import RobustImage from '@/components/ui/RobustImage';
 import { useRouter } from 'next/navigation';
 import { useProduct, useStockCheck, useCategories, useAllProducts } from '@/hooks/useProducts';
-import { useCartContext } from '@/components/CartProvider';
-import ProductCustomizer from '@/components/ProductCustomizer';
-import ProductGallery from '@/components/ProductGallery';
+import { useCartContext } from '@/components/cart/CartProvider';
+import ProductCustomizer from '@/components/product/ProductCustomizer';
+import ProductGallery from '@/components/product/ProductGallery';
 import { ProductCustomization } from '@/types/customization';
 import { Product, ProductImage } from '@/lib/products';
 import { isCustomizationComplete } from '@/lib/customization';
-import ProjectSteps from '@/components/ProjectSteps';
+import ProjectSteps from '@/components/product/ProjectSteps';
 
 // Fonction pour obtenir une description du grammage
 function getGrammageDescription(gsm: number): string {

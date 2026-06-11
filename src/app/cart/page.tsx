@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useCart } from '@/hooks/useCart';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import AuthModal from '@/components/AuthModal';
-import AddressModal from '@/components/AddressModal';
+import AuthModal from '@/components/modals/AuthModal';
+import AddressModal from '@/components/modals/AddressModal';
 import { fetchCustomerProfile } from '@/lib/supabase/services/userService';
 
 // Fonction utilitaire pour vérifier si une couleur est un code hexadécimal

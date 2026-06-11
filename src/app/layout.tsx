@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { CartProvider } from "@/components/CartProvider";
+import { CartProvider } from "@/components/cart/CartProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
-import JsonLd from "@/components/SEO/JsonLd";
+import JsonLd from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
   title: "Smiletex - Personnalisation de vêtements à Lyon | Impression textile",

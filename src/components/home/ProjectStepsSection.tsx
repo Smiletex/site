@@ -1,6 +1,6 @@
 'use client';
 
-import ProjectSteps from "@/components/ProjectSteps";
+import ProjectSteps from "@/components/product/ProjectSteps";
 
 export default function ProjectStepsSection() {
   return (
