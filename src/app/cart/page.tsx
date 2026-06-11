@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCart } from '@/hooks/useCart';
+import { useCart } from '@/components/cart/CartProvider';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthModal from '@/components/modals/AuthModal';

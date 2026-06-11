@@ -7,6 +7,24 @@ import { isSingleCustomizationComplete, isCustomizationComplete } from '@/lib/cu
 // Source UNIQUE du prix de personnalisation (partagée avec le recalcul serveur au checkout).
 import { calculateCustomizationPrice as computeCustomizationPrice } from '@/lib/orders/pricing';
 
+/**
+ * Envoie une image de personnalisation vers Supabase Storage (via /api/uploads)
+ * et renvoie son URL publique. Remplace l'ancien stockage base64 (E2) :
+ * le panier et la commande ne contiennent plus que l'URL.
+ */
+async function uploadCustomizationImage(file: File): Promise<string> {
+  const MAX_BYTES = 5 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    throw new Error('L\'image est trop volumineuse (5 Mo maximum).');
+  }
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/uploads', { method: 'POST', body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Échec de l\'upload de l\'image.');
+  return data.url as string;
+}
+
 interface ProductCustomizerProps {
   onSave: (customization: ProductCustomization, price: number) => void;
   initialCustomization?: ProductCustomization | null;
@@ -905,63 +923,19 @@ export default function ProductCustomizer({ onSave, initialCustomization = null,
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) {
-                              console.log('Fichier sélectionné pour l\'avant:', file.name, file.size);
-                              try {
-                                // Vérifier la taille du fichier (max 5 Mo)
-                                const maxSize = 5 * 1024 * 1024; // 5 Mo en octets
-                                if (file.size > maxSize) {
-                                  throw new Error(`L'image est trop volumineuse. Taille maximale: 5 Mo`);
-                                }
-                                
-                                // Convertir le fichier en base64 pour stockage permanent
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  if (event.target?.result) {
-                                    // Stocker directement le base64 comme valeur de image_url
-                                    const base64String = event.target.result as string;
-                                    console.log('Image avant convertie en base64, longueur:', base64String.length);
-                                    
-                                    // Mettre à jour le type de contenu
-                                    setFrontContentType('image');
-                                    
-                                    // Mettre à jour la personnalisation avant avec l'image en base64
-                                    // Utiliser le type ContentType correct pour éviter les erreurs TypeScript
-                                    const imageType: ContentType = 'image';
-                                    
-                                    const updatedCustomization: SingleCustomization = {
-                                      ...frontCustomization,
-                                      image_url: base64String,
-                                      type: imageType
-                                    };
-                                    
-                                    // Mettre à jour l'état
-                                    setFrontCustomization(updatedCustomization);
-                                    
-                                    // Afficher les données pour débogage
-                                    console.log('Base64 avant sauvegardé:', base64String.substring(0, 50) + '...');
-                                    console.log('Mise à jour de frontCustomization avec image_url:', updatedCustomization.image_url ? 'Présent' : 'Absent');
-                                    
-                                    // Pas besoin de forcer la sauvegarde ici pour éviter les boucles infinies
-                                    // L'image est déjà sauvegardée dans l'état local
-                                  }
-                                };
-                                reader.onerror = (error) => {
-                                  console.error('Erreur FileReader:', error);
-                                  alert('Erreur lors de la lecture du fichier. Veuillez réessayer.');
-                                };
-                                reader.readAsDataURL(file);
-                              } catch (error) {
-                                // Récupérer le message d'erreur
-                                const errorMessage = error instanceof Error 
-                                  ? error.message 
-                                  : 'Erreur inconnue lors du chargement';
-                                
-                                console.error('Erreur lors du chargement de l\'image avant:', error);
-                                alert(`Erreur: ${errorMessage}`);
-                              }
+                            if (!file) return;
+                            try {
+                              const url = await uploadCustomizationImage(file);
+                              setFrontContentType('image');
+                              setFrontCustomization(prev => ({
+                                ...prev,
+                                image_url: url,
+                                type: 'image' as ContentType,
+                              }));
+                            } catch (error) {
+                              alert(error instanceof Error ? error.message : 'Erreur lors du chargement de l\'image.');
                             }
                           }}
                           className="w-full p-2 border rounded-md"
@@ -1183,63 +1157,19 @@ export default function ProductCustomizer({ onSave, initialCustomization = null,
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) {
-                              console.log('Fichier sélectionné pour l\'arrière:', file.name, file.size);
-                              try {
-                                // Vérifier la taille du fichier (max 5 Mo)
-                                const maxSize = 5 * 1024 * 1024; // 5 Mo en octets
-                                if (file.size > maxSize) {
-                                  throw new Error(`L'image est trop volumineuse. Taille maximale: 5 Mo`);
-                                }
-                                
-                                // Convertir le fichier en base64 pour stockage permanent
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  if (event.target?.result) {
-                                    // Stocker directement le base64 comme valeur de image_url
-                                    const base64String = event.target.result as string;
-                                    console.log('Image arrière convertie en base64, longueur:', base64String.length);
-                                    
-                                    // Mettre à jour le type de contenu
-                                    setBackContentType('image');
-                                    
-                                    // Mettre à jour la personnalisation arrière avec l'image en base64
-                                    // Utiliser le type ContentType correct pour éviter les erreurs TypeScript
-                                    const imageType: ContentType = 'image';
-                                    
-                                    const updatedCustomization: SingleCustomization = {
-                                      ...backCustomization,
-                                      image_url: base64String,
-                                      type: imageType
-                                    };
-                                    
-                                    // Mettre à jour l'état
-                                    setBackCustomization(updatedCustomization);
-                                    
-                                    // Afficher les données pour débogage
-                                    console.log('Base64 arrière sauvegardé:', base64String.substring(0, 50) + '...');
-                                    console.log('Mise à jour de backCustomization avec image_url:', updatedCustomization.image_url ? 'Présent' : 'Absent');
-                                    
-                                    // Pas besoin de forcer la sauvegarde ici pour éviter les boucles infinies
-                                    // L'image est déjà sauvegardée dans l'état local
-                                  }
-                                };
-                                reader.onerror = (error) => {
-                                  console.error('Erreur FileReader:', error);
-                                  alert('Erreur lors de la lecture du fichier. Veuillez réessayer.');
-                                };
-                                reader.readAsDataURL(file);
-                              } catch (error) {
-                                // Récupérer le message d'erreur
-                                const errorMessage = error instanceof Error 
-                                  ? error.message 
-                                  : 'Erreur inconnue lors du chargement';
-                                
-                                console.error('Erreur lors du chargement de l\'image arrière:', error);
-                                alert(`Erreur: ${errorMessage}`);
-                              }
+                            if (!file) return;
+                            try {
+                              const url = await uploadCustomizationImage(file);
+                              setBackContentType('image');
+                              setBackCustomization(prev => ({
+                                ...prev,
+                                image_url: url,
+                                type: 'image' as ContentType,
+                              }));
+                            } catch (error) {
+                              alert(error instanceof Error ? error.message : 'Erreur lors du chargement de l\'image.');
                             }
                           }}
                           className="w-full p-2 border rounded-md"

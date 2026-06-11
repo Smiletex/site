@@ -240,7 +240,8 @@ export default function ProductDetail({ id }: { id: string }) {
   
   // Fonction pour ajouter au panier avec personnalisation
   const handleAddToCartWithCustomization = async (customizationData: ProductCustomization, price: number) => {
-    // Mettre à jour le prix de personnalisation
+    // Mémoriser le prix de perso pour l'affichage (on utilise l'argument `price`
+    // directement plus bas pour éviter une race avec l'état React).
     setCustomizationPrice(price);
     try {
       setIsAddingToCart(true);
@@ -266,10 +267,11 @@ export default function ProductDetail({ id }: { id: string }) {
             const { discountedPrice } = getQuantityDiscount(totalItemsSelected);
             const basePrice = discountPercent > 0 ? discountedPrice : product.base_price;
             
-            // N'ajouter le prix de personnalisation que si elle est complète
-            const finalPrice = basePrice + (variant.price_adjustment || 0) + 
-                              (isPersonnalisationComplete ? customizationPrice : 0);
-            
+            // N'ajouter le prix de personnalisation que si elle est complète.
+            // On utilise l'argument `price` (à jour), pas l'état `customizationPrice`.
+            const finalPrice = basePrice + (variant.price_adjustment || 0) +
+                              (isPersonnalisationComplete ? price : 0);
+
             addToCart({
               id: cartItemId,
               productId: product.id,

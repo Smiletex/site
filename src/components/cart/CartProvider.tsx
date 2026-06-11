@@ -1,274 +1,221 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ProductCustomization } from '@/types/customization';
-import { calculateCustomizationPrice } from '@/lib/customization';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { CartItem } from '@/types/cart';
 
-// Type pour un élément du panier
-export type CartItem = {
-  id: string;
-  productId: string;
-  variantId?: string;
-  name: string;
-  price: number;
-  quantity: number;
-  size?: string;
-  color?: string;
-  imageUrl: string;
-  customization?: ProductCustomization;
-  shippingType?: 'normal' | 'fast' | 'urgent';
-};
+/**
+ * Source UNIQUE de vérité du panier.
+ *
+ * Remplace les anciennes implémentations concurrentes (CartProvider + hook
+ * useCart/lib/cart) qui partageaient la même clé localStorage avec des identités
+ * d'articles divergentes (E1). Ici :
+ *  - chaque article a un id STABLE dérivé de sa configuration (produit, variante,
+ *    taille, couleur, personnalisation) : deux ajouts identiques fusionnent, deux
+ *    personnalisations différentes restent distinctes. Plus de Date.now().
+ *  - mises à jour immuables, persistées dans localStorage (clé `cart`).
+ *
+ * Note : le prix porté par les articles est indicatif (affichage). Le prix
+ * réellement facturé est TOUJOURS recalculé côté serveur au checkout (cf B1).
+ */
 
-// Type pour le contexte du panier
-type CartContextType = {
+const STORAGE_KEY = 'cart';
+
+function hashString(input: string): string {
+  let h = 5381;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) + h + input.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
+/** Identité stable d'un article (indépendante de la quantité). */
+function computeItemId(item: CartItem): string {
+  const custom = item.customization ? JSON.stringify(item.customization) : '';
+  return [
+    item.productId,
+    item.variantId ?? '',
+    item.size ?? '',
+    item.color ?? '',
+    hashString(custom),
+  ].join('|');
+}
+
+interface CheckoutOptions {
+  email?: string;
+}
+
+interface CartContextType {
+  cart: CartItem[];
   cartItems: CartItem[];
-  addToCart: (item: CartItem) => void;
-  removeFromCart: (itemId: string, size?: string, color?: string, customization?: ProductCustomization) => void;
-  updateQuantity: (itemId: string, quantity: number, size?: string, color?: string, customization?: ProductCustomization) => void;
-  clearCart: () => void;
-  cartCount: number;
+  isLoading: boolean;
+  total: number;
   cartTotal: number;
   itemCount: number;
-};
+  cartCount: number;
+  addToCart: (item: CartItem) => void;
+  removeFromCart: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
+  clearCart: () => void;
+  createCheckoutSession: (
+    options?: CheckoutOptions
+  ) => Promise<{ orderId?: string; url?: string; error?: string }>;
+}
 
-// Créer le contexte
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Hook personnalisé pour utiliser le contexte du panier
-export const useCartContext = () => {
-  const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCartContext doit être utilisé à l\'intérieur d\'un CartProvider');
-  }
-  return context;
+export const useCart = (): CartContextType => {
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error('useCart doit être utilisé dans un CartProvider');
+  return ctx;
 };
 
-// Générer une clé unique pour un élément du panier
-const getCartItemKey = (item: CartItem): string => {
-  let key = `${item.id}-${item.size || 'default'}-${item.color || 'default'}`;
-  
-  // Si l'élément a une personnalisation, ajouter un identifiant unique
-  if (item.customization) {
-    key += `-custom-${Date.now()}`;
+// Alias rétro-compatible (anciens consommateurs).
+export const useCartContext = useCart;
+
+function loadFromStorage(): CartItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
-  
-  return key;
-};
+}
 
-// Vérifier si deux éléments du panier sont identiques (même produit, taille, couleur et sans personnalisation)
-const areItemsEqual = (item1: CartItem, item2: CartItem): boolean => {
-  // Si l'un des éléments a une personnalisation, ils ne sont jamais considérés comme identiques
-  if (item1.customization || item2.customization) {
-    return false;
-  }
-  
-  return (
-    item1.id === item2.id &&
-    item1.size === item2.size &&
-    item1.color === item2.color
-  );
-};
+export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { user } = useAuth();
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-// Composant Provider
-export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [cartCount, setCartCount] = useState(0);
-  const [cartTotal, setCartTotal] = useState(0);
-  const [itemCount, setItemCount] = useState(0);
-  // Ajout d'un état pour forcer les mises à jour
-  const [updateCounter, setUpdateCounter] = useState(0);
-
-  // Charger le panier depuis le localStorage au chargement
+  // Chargement initial (client uniquement) + synchro inter-onglets.
   useEffect(() => {
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      try {
-        const parsedCart = JSON.parse(savedCart);
-        setCartItems(parsedCart);
-      } catch (error) {
-        console.error('Erreur lors du chargement du panier:', error);
-      }
+    setCart(loadFromStorage());
+    setIsLoading(false);
+
+    const onExternalChange = () => setCart(loadFromStorage());
+    window.addEventListener('storage', onExternalChange);
+    window.addEventListener('cartUpdated', onExternalChange);
+    return () => {
+      window.removeEventListener('storage', onExternalChange);
+      window.removeEventListener('cartUpdated', onExternalChange);
+    };
+  }, []);
+
+  // Persistance : une seule source écrit le localStorage.
+  const persist = useCallback((next: CartItem[]) => {
+    setCart(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      // Notifier les composants hors contexte (ex. compteur dans un autre arbre).
+      window.dispatchEvent(new Event('cartUpdated'));
     }
   }, []);
 
-  // Fonction pour forcer la mise à jour du panier
-  const forceUpdate = () => {
-    // Incrémenter le compteur pour forcer une mise à jour
-    setUpdateCounter(prev => prev + 1);
-    
-    // Récupérer le panier depuis le localStorage
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      try {
-        const parsedCart = JSON.parse(savedCart) as CartItem[];
-        setCartItems(parsedCart);
-        
-        // Mettre à jour les compteurs directement
-        const count = parsedCart.reduce((total: number, item: CartItem) => total + item.quantity, 0);
-        setCartCount(count);
-        
-        const total = parsedCart.reduce((sum: number, item: CartItem) => sum + (item.price * item.quantity), 0);
-        setCartTotal(total);
-        
-        const items = parsedCart.length;
-        setItemCount(items);
-        
-        console.log('Panier mis à jour avec force:', { items, count, total });
-      } catch (error) {
-        console.error('Erreur lors du chargement forcé du panier:', error);
-      }
-    } else {
-      // Si le panier est vide
-      setCartItems([]);
-      setCartCount(0);
-      setCartTotal(0);
-      setItemCount(0);
-      console.log('Panier vidé avec force');
-    }
-  };
-
-  // Mettre à jour le localStorage lorsque le panier change
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cartItems));
-    
-    // Calculer le nombre total d'articles
-    const count = cartItems.reduce((total: number, item: CartItem) => total + item.quantity, 0);
-    setCartCount(count);
-    
-    // Calculer le prix total
-    // Note: Le prix de la personnalisation est déjà inclus dans item.price
-    // lors de l'ajout au panier, donc nous n'avons pas besoin de le recalculer ici
-    const total = cartItems.reduce((sum: number, item: CartItem) => {
-      return sum + (item.price * item.quantity);
-    }, 0);
-    setCartTotal(total);
-    
-    // Calculer le nombre d'articles
-    const items = cartItems.length;
-    setItemCount(items);
-    
-    console.log('Mise à jour du panier:', { items, count, total });
-  }, [cartItems, updateCounter]);
-
-  // Ajouter un article au panier
-  const addToCart = (item: CartItem) => {
-    setCartItems(prevItems => {
-      // Chercher si l'article existe déjà dans le panier
-      const existingItemIndex = prevItems.findIndex(
-        prevItem => areItemsEqual(prevItem, item)
-      );
-
-      let updatedItems;
-      if (existingItemIndex >= 0) {
-        // Si l'article existe, mettre à jour la quantité
-        updatedItems = [...prevItems];
-        updatedItems[existingItemIndex].quantity += item.quantity;
-      } else {
-        // Sinon, ajouter le nouvel article
-        updatedItems = [...prevItems, { ...item }];
-      }
-      
-      // Mettre à jour le localStorage directement
-      localStorage.setItem('cart', JSON.stringify(updatedItems));
-      
-      // Forcer la mise à jour du compteur
-      setTimeout(() => forceUpdate(), 0);
-      
-      return updatedItems;
-    });
-  };
-
-  // Supprimer un article du panier
-  const removeFromCart = (itemId: string, size?: string, color?: string, customization?: ProductCustomization) => {
-    setCartItems(prevItems => {
-      let updatedItems;
-      if (customization) {
-        // Pour les articles personnalisés, supprimer l'article exact
-        updatedItems = prevItems.filter(item => 
-          !(item.id === itemId && 
-            item.size === size && 
-            item.color === color && 
-            item.customization === customization)
-        );
-      } else {
-        // Pour les articles standard, supprimer en fonction de l'ID, de la taille et de la couleur
-        updatedItems = prevItems.filter(item => 
-          !(item.id === itemId && 
-            item.size === size && 
-            item.color === color && 
-            !item.customization)
-        );
-      }
-      
-      // Mettre à jour le localStorage directement
-      localStorage.setItem('cart', JSON.stringify(updatedItems));
-      
-      // Forcer la mise à jour du compteur
-      setTimeout(() => forceUpdate(), 0);
-      
-      return updatedItems;
-    });
-  };
-
-  // Mettre à jour la quantité d'un article
-  const updateQuantity = (itemId: string, quantity: number, size?: string, color?: string, customization?: ProductCustomization) => {
-    setCartItems(prevItems => {
-      const updatedItems = prevItems.map(item => {
-        if (customization) {
-          // Pour les articles personnalisés, mettre à jour l'article exact
-          if (item.id === itemId && 
-              item.size === size && 
-              item.color === color && 
-              item.customization === customization) {
-            return { ...item, quantity };
-          }
-        } else {
-          // Pour les articles standard, mettre à jour en fonction de l'ID, de la taille et de la couleur
-          if (item.id === itemId && 
-              item.size === size && 
-              item.color === color && 
-              !item.customization) {
-            return { ...item, quantity };
-          }
+  const addToCart = useCallback(
+    (item: CartItem) => {
+      const id = computeItemId(item);
+      setCart((prev) => {
+        const index = prev.findIndex((it) => it.id === id);
+        const next =
+          index >= 0
+            ? prev.map((it, i) =>
+                i === index ? { ...it, quantity: it.quantity + item.quantity } : it
+              )
+            : [...prev, { ...item, id }];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          window.dispatchEvent(new Event('cartUpdated'));
         }
-        return item;
+        return next;
       });
-      
-      // Mettre à jour le localStorage directement
-      localStorage.setItem('cart', JSON.stringify(updatedItems));
-      
-      // Forcer la mise à jour du compteur
-      setTimeout(() => forceUpdate(), 0);
-      
-      return updatedItems;
-    });
-  };
-
-  // Vider le panier
-  const clearCart = () => {
-    setCartItems([]);
-    
-    // Vider le localStorage directement
-    localStorage.removeItem('cart');
-    
-    // Forcer la mise à jour du compteur
-    setTimeout(() => forceUpdate(), 0);
-  };
-
-  return (
-    <CartContext.Provider
-      value={{
-        cartItems,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        cartCount,
-        cartTotal,
-        itemCount,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+    },
+    []
   );
+
+  const removeFromCart = useCallback(
+    (id: string) => {
+      setCart((prev) => {
+        const next = prev.filter((it) => it.id !== id);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          window.dispatchEvent(new Event('cartUpdated'));
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const updateQuantity = useCallback((id: string, quantity: number) => {
+    if (quantity < 1) return;
+    setCart((prev) => {
+      const next = prev.map((it) => (it.id === id ? { ...it, quantity } : it));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        window.dispatchEvent(new Event('cartUpdated'));
+      }
+      return next;
+    });
+  }, []);
+
+  const clearCart = useCallback(() => {
+    persist([]);
+  }, [persist]);
+
+  const createCheckoutSession = useCallback(
+    async (options?: CheckoutOptions) => {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart,
+          userId: user?.id,
+          email: options?.email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erreur lors de la création du paiement');
+      }
+      return data as { orderId?: string; url?: string };
+    },
+    [cart, user]
+  );
+
+  const total = useMemo(
+    () => cart.reduce((sum, it) => sum + it.price * it.quantity, 0),
+    [cart]
+  );
+  const itemCount = useMemo(
+    () => cart.reduce((sum, it) => sum + it.quantity, 0),
+    [cart]
+  );
+
+  const value: CartContextType = {
+    cart,
+    cartItems: cart,
+    isLoading,
+    total,
+    cartTotal: total,
+    itemCount,
+    cartCount: itemCount,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    createCheckoutSession,
+  };
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
