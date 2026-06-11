@@ -179,3 +179,16 @@ Une image 5 Mo → ~6,7 Mo de base64 dans `localStorage['cart']` → quota explo
   - Types `null`/`undefined` mal gérés dans `products/[id]/ProductDetail.tsx` (couleur de variante).
 - **`ReferenceError: location is not defined`** au prérendu (build) : un composant utilise `location`/`window.location` sans garde `typeof window`. Non bloquant (build OK) mais à corriger proprement (l'ancien hack `fix-build-errors.js`, supprimé, visait ce problème).
 - **218 erreurs + 119 warnings ESLint** pré-existantes (`any` explicites, variables inutilisées) : dette de typage à éroder progressivement.
+
+### Étape 4 — Refonte du tunnel commande/paiement (B1, B2, B7)
+- B1 : prix recalculés côté serveur (lib/orders/cartValidation + pricing), tout prix client ignoré.
+- B2 : webhook Stripe = seule source de vérité (statut payé, email, stock, vidage panier, idempotent). Success page en lecture seule.
+- B7 : décrément de stock atomique via fonction SQL (db/migrations/001_decrement_variant_stock.sql, à exécuter sur Supabase).
+- E3 résolu : barème de personnalisation unique (type + position, remise recto-verso) partagé entre l'affichage customizer et le serveur.
+- Routes dangereuses supprimées : set-unpaid, update-status.
+- Statuts : pending_payment -> paid | payment_failed | cancelled (alignés côté admin).
+
+#### Actions requises côté client (prod)
+1. Exécuter db/migrations/001_decrement_variant_stock.sql dans le SQL Editor Supabase.
+2. Configurer le webhook Stripe (endpoint /api/webhook) et renseigner STRIPE_WEBHOOK_SECRET, en écoutant : checkout.session.completed, checkout.session.expired, payment_intent.payment_failed.
+3. Triggers dormants : before_order_confirmation / on_order_confirmation (transition pending->confirmed) ne sont plus utilisés et n'interfèrent pas. À supprimer proprement lors d'une passe DB ultérieure.
