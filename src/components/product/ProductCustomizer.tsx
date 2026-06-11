@@ -4,24 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { ProductCustomization, SingleCustomization, Face, ContentType } from '@/types/customization';
 import { isSingleCustomizationComplete, isCustomizationComplete } from '@/lib/customization';
-
-// Définition des prix pour chaque type de personnalisation et position
-const CUSTOMIZATION_PRICES = {
-  // Prix par type d'impression (prix de base)
-  types: {
-    'broderie': 8.50,
-    'impression': 5.00,
-  },
-  // Prix fixes par position (en euros)
-  positions: {
-    'devant-pec': 7.84,     // Pec gauche = 7,84€
-    'devant-pecs': 12.00,    // Deux pecs = 12€
-    'devant-centre': 29.60,  // Très grand logo = 29,60€
-    'devant-complet': 17.88, // Devant complet = 17,88€
-    'dos-haut': 9.40,        // Dos haut (prix ajusté)
-    'dos-complet': 33.00,    // Dos complet (prix ajusté)
-  },
-};
+// Source UNIQUE du prix de personnalisation (partagée avec le recalcul serveur au checkout).
+import { calculateCustomizationPrice as computeCustomizationPrice } from '@/lib/orders/pricing';
 
 interface ProductCustomizerProps {
   onSave: (customization: ProductCustomization, price: number) => void;
@@ -227,59 +211,15 @@ export default function ProductCustomizer({ onSave, initialCustomization = null,
         }
       }
       
-      // Calculer le prix initial
-      const initialPrice = calculateCustomizationPrice(initialCustomization);
+      // Calculer le prix initial (formule canonique partagée avec le serveur)
+      const initialPrice = computeCustomizationPrice(initialCustomization);
       setCustomizationPrice(initialPrice);
-      console.log('Prix total de la personnalisation:', initialPrice.toFixed(2) + '€');
       
       // Marquer comme initialisé
       setIsInitialized(true);
     }
   }, [initialCustomization, isInitialized]);
 
-  // Fonction pour calculer le prix des personnalisations
-  const calculateCustomizationPrice = (customization: ProductCustomization): number => {
-    let totalPrice = 0;
-    
-    // Parcourir toutes les personnalisations
-    customization.customizations.forEach(custom => {
-      if (custom.type_impression) {
-        // Prix fixes pour les positions
-        let positionPrice = 0;
-        
-        // Prix pour la position avant
-        if (custom.position_avant) {
-          const positionCost = CUSTOMIZATION_PRICES.positions[custom.position_avant as keyof typeof CUSTOMIZATION_PRICES.positions] || 0;
-          positionPrice += positionCost;
-          console.log(`Prix pour position avant ${custom.position_avant}: ${positionCost}€`);
-        }
-        
-        // Prix pour la position arrière
-        if (custom.position_arriere) {
-          const positionCost = CUSTOMIZATION_PRICES.positions[custom.position_arriere as keyof typeof CUSTOMIZATION_PRICES.positions] || 0;
-          positionPrice += positionCost;
-          console.log(`Prix pour position arrière ${custom.position_arriere}: ${positionCost}€`);
-        }
-        
-        // Appliquer une réduction de 15% si les deux faces sont personnalisées
-        if (custom.position_avant && custom.position_arriere) {
-          const reductionAmount = positionPrice * 0.15; // Réduction de 15%
-          positionPrice = positionPrice - reductionAmount;
-          console.log(`Réduction appliquée pour personnalisation recto-verso: -15% (${reductionAmount.toFixed(2)}€)`);
-        }
-        
-        // Ajouter au prix total
-        totalPrice += positionPrice;
-        console.log(`Prix total de la personnalisation: ${positionPrice.toFixed(2)}€`);
-      }
-    });
-    
-    // Mettre à jour l'état du prix
-    setCustomizationPrice(totalPrice);
-    
-    return totalPrice;
-  };
-  
   // Fonction pour sauvegarder les personnalisations (définie avec useCallback pour éviter les références circulaires)
   const handleSaveOnly = useCallback(() => {
     console.log('Début de la sauvegarde des personnalisations');
@@ -371,43 +311,13 @@ export default function ProductCustomizer({ onSave, initialCustomization = null,
       customizations: updatedCustomizations
     };
     
-    // Calculer le prix en fonction des positions sélectionnées avec les prix fixes
-    let totalPrice = 0;
-    
-    // Prix fixes pour les positions
-    let positionPrice = 0;
-    
-    // Prix pour la position avant
-    if (frontCustomization.position) {
-      const positionCost = CUSTOMIZATION_PRICES.positions[frontCustomization.position as keyof typeof CUSTOMIZATION_PRICES.positions] || 0;
-      positionPrice += positionCost;
-      console.log(`Prix pour position avant ${frontCustomization.position}: ${positionCost}€`);
-    }
-    
-    // Prix pour la position arrière
-    if (backCustomization.position) {
-      const positionCost = CUSTOMIZATION_PRICES.positions[backCustomization.position as keyof typeof CUSTOMIZATION_PRICES.positions] || 0;
-      positionPrice += positionCost;
-      console.log(`Prix pour position arrière ${backCustomization.position}: ${positionCost}€`);
-    }
-    
-    // Appliquer une réduction de 15% si les deux faces sont personnalisées
-    if (frontCustomization.position && backCustomization.position) {
-      const reductionAmount = positionPrice * 0.15; // Réduction de 15%
-      positionPrice = positionPrice - reductionAmount;
-      console.log(`Réduction appliquée pour personnalisation recto-verso: -15% (${reductionAmount.toFixed(2)}€)`);
-    }
-    
-    // Le prix total est simplement le prix des positions
-    totalPrice = positionPrice;
-    console.log(`Prix final de la personnalisation: ${totalPrice.toFixed(2)}€`);
-    
-    // Mettre à jour l'état global
+    // Prix calculé par la formule canonique (type + position, remise recto-verso),
+    // exactement la même que le recalcul serveur au checkout : prix affiché = prix facturé.
+    const totalPrice = computeCustomizationPrice(finalProductCustomization);
+
     setProductCustomization(finalProductCustomization);
     setCustomizationPrice(totalPrice);
-    
-    // Envoyer la personnalisation avec le prix
-    console.log('Sauvegarde des personnalisations terminée:', finalProductCustomization, 'Prix:', totalPrice);
+
     onSave(finalProductCustomization, totalPrice);
   }, [frontCustomization, backCustomization, frontContentType, backContentType, onSave]);
   

@@ -153,16 +153,20 @@ export default function OrdersPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'paid':
+        return 'bg-emerald-100 text-emerald-800';
       case 'completed':
         return 'bg-green-100 text-green-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
+      case 'pending_payment':
       case 'unpaid':
         return 'bg-orange-100 text-orange-800';
       case 'processing':
         return 'bg-blue-100 text-blue-800';
       case 'shipped':
         return 'bg-purple-100 text-purple-800';
+      case 'payment_failed':
       case 'cancelled':
         return 'bg-red-100 text-red-800';
       default:
@@ -207,11 +211,12 @@ export default function OrdersPage() {
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="all">Tous les statuts</option>
-                <option value="unpaid">Non payée</option>
-                <option value="pending">En attente</option>
+                <option value="pending_payment">En attente de paiement</option>
+                <option value="paid">Payée</option>
                 <option value="processing">En traitement</option>
                 <option value="shipped">Expédiée</option>
-                <option value="delivered">Livrée</option>
+                <option value="completed">Terminée</option>
+                <option value="payment_failed">Paiement échoué</option>
                 <option value="cancelled">Annulée</option>
                 <option value="completed">Complétée</option>
               </select>

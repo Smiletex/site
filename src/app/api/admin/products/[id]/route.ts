@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Création d'un client Supabase avec la clé de service (privilèges admin)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.SUPABASE_SERVICE_ROLE_KEY as string
-);
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdmin } from '@/lib/admin/guard';
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
-    // Vérifier l'authentification admin via les headers
-    const authHeader = request.headers.get('Authorization');
-    console.log(`API: En-tête d'autorisation reçu: ${authHeader ? 'Présent' : 'Absent'}`);
-    
-    // Pour simplifier, acceptons toutes les requêtes pour l'instant
-    // const isAuthenticated = authHeader === `Bearer ${process.env.ADMIN_PASSWORD}`;
-    const isAuthenticated = true;
-    
-    if (!isAuthenticated) {
-      console.error('Tentative d\'accès non autorisé à l\'API de récupération de produit');
-      return NextResponse.json({ success: false, error: 'Non autorisé' }, { status: 401 });
-    }
-    
-    // Utiliser params.id de manière sécurisée
-    const { id } = params;
-    console.log(`API: Récupération du produit avec l'ID: ${id}`);
-    
+    const { id } = await params;
+
     if (!id) {
       console.error('API: ID de produit manquant');
       return NextResponse.json({ success: false, error: 'ID de produit manquant' }, { status: 400 });
