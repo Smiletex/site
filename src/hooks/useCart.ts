@@ -159,33 +159,9 @@ export function useCart() {
       if (!response.ok) {
         throw new Error(data.error || 'Une erreur est survenue lors de la création de la session de paiement');
       }
-      
-      // S'assurer que la commande est bien marquée comme "unpaid"
-      if (data.orderId) {
-        try {
-          const unpaidResponse = await fetch('/api/orders/set-unpaid', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              orderId: data.orderId,
-              userId: userId
-            }),
-          });
-          
-          const unpaidData = await unpaidResponse.json();
-          if (!unpaidResponse.ok) {
-            console.error('Erreur lors de la mise à jour du statut à unpaid:', unpaidData.error);
-          } else {
-            console.log('Commande marquée comme non payée:', unpaidData);
-          }
-        } catch (unpaidError) {
-          console.error('Erreur lors de l\'appel à set-unpaid:', unpaidError);
-          // On continue malgré l'erreur car ce n'est pas bloquant pour le processus de paiement
-        }
-      }
 
+      // La commande est créée en "pending_payment" par /api/checkout.
+      // Sa confirmation (statut payé, stock, email) est gérée par le webhook Stripe.
       return data as CartResponse;
     } catch (error) {
       console.error('Erreur lors de la création de la session de paiement:', error);

@@ -1,119 +1,136 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { supabase } from '@/lib/supabase/client';
+import { stripe } from '@/lib/stripe/server';
+import {
+  markOrderPaid,
+  decrementStockForOrder,
+  clearUserCart,
+  attachPaymentIntent,
+  markOrderByPaymentIntent,
+  cancelOrder,
+  ORDER_STATUS,
+} from '@/lib/orders/orderService';
+import { sendOrderConfirmation } from '@/lib/orders/confirmationEmail';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2025-02-24.acacia',
-});
-
+/**
+ * Webhook Stripe : SEULE source de vérité de la confirmation de paiement (B2).
+ *
+ * La signature est vérifiée avant tout traitement. Sur `checkout.session.completed`,
+ * et de façon idempotente (un seul traitement même si Stripe rejoue l'événement) :
+ *  - la commande passe à `paid`,
+ *  - le stock est décrémenté (B7),
+ *  - l'email de confirmation est envoyé,
+ *  - le panier de l'utilisateur connecté est vidé.
+ */
 export async function POST(request: Request) {
+  let event: Stripe.Event;
+
   try {
     const body = await request.text();
-    const headersList = await headers();
-    const signature = headersList.get('stripe-signature');
-    
+    const signature = (await headers()).get('stripe-signature');
     if (!signature) {
-      throw new Error('No stripe signature found');
+      return NextResponse.json({ error: 'Signature Stripe absente' }, { status: 400 });
     }
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'inconnue';
+    console.error(`Échec de vérification de la signature webhook: ${message}`);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
-    let event: Stripe.Event;
-
-    try {
-      event = stripe.webhooks.constructEvent(
-        body,
-        signature,
-        process.env.STRIPE_WEBHOOK_SECRET as string
-      );
-    } catch (error: any) {
-      console.error(`Webhook signature verification failed: ${error.message}`);
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
+  try {
     switch (event.type) {
-      case 'checkout.session.completed':
+      case 'checkout.session.completed': {
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+      }
+
+      case 'checkout.session.expired': {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.orderId;
-        const userId = session.metadata?.userId;
-        const shippingDetails = session.shipping_details;
-
-        if (!orderId) {
-          throw new Error('Order ID not found in session metadata');
-        }
-
-        // 1. Update shipping details but keep the status as 'unpaid'
-        // La mise à jour du statut sera gérée par la page de succès
-        const { error: orderError } = await supabase
-          .from('orders')
-          .update({
-            shipping_address: {
-              name: shippingDetails?.name,
-              address: {
-                line1: shippingDetails?.address?.line1,
-                line2: shippingDetails?.address?.line2,
-                city: shippingDetails?.address?.city,
-                postal_code: shippingDetails?.address?.postal_code,
-                country: shippingDetails?.address?.country,
-              },
-            },
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', orderId);
-
-        if (orderError) {
-          throw new Error(`Error updating order: ${orderError.message}`);
-        }
-
-        // 2. Clear user's cart if they are logged in
-        if (userId && userId !== 'guest') {
-          const { data: cart } = await supabase
-            .from('carts')
-            .select('id')
-            .eq('user_id', userId)
-            .single();
-
-          if (cart) {
-            // Supprimer d'abord les articles du panier
-            await supabase
-              .from('cart_items')
-              .delete()
-              .eq('cart_id', cart.id);
-
-            // Puis supprimer le panier
-            await supabase
-              .from('carts')
-              .delete()
-              .eq('id', cart.id);
-          }
-        }
+        if (orderId) await cancelOrder(orderId);
         break;
+      }
 
-      case 'payment_intent.payment_failed':
+      case 'payment_intent.payment_failed': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        
-        const { error } = await supabase
-          .from('orders')
-          .update({ 
-            status: 'failed',
-            updated_at: new Date().toISOString()
-          })
-          .eq('payment_intent_id', paymentIntent.id);
-
-        if (error) {
-          console.error('Error updating failed order:', error);
-        }
+        await markOrderByPaymentIntent(paymentIntent.id, ORDER_STATUS.PAYMENT_FAILED);
         break;
+      }
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        // Événement non géré : on accuse réception pour éviter les relances.
+        break;
     }
 
     return NextResponse.json({ received: true });
-  } catch (error: any) {
-    console.error('Webhook error:', error);
+  } catch (error) {
+    console.error('Erreur de traitement du webhook:', error);
     return NextResponse.json(
-      { error: `Webhook Error: ${error.message}` },
+      { error: error instanceof Error ? error.message : 'Erreur webhook' },
       { status: 500 }
     );
+  }
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+  const orderId = session.metadata?.orderId;
+  const userId = session.metadata?.userId;
+
+  if (!orderId) {
+    throw new Error('orderId absent des métadonnées de la session');
+  }
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const shipping =
+    (session as any).shipping_details ??
+    (session as any).collected_information?.shipping_details ??
+    null;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const shippingAddress = shipping
+    ? {
+        name: shipping.name,
+        address: {
+          line1: shipping.address?.line1,
+          line2: shipping.address?.line2,
+          city: shipping.address?.city,
+          postal_code: shipping.address?.postal_code,
+          country: shipping.address?.country,
+        },
+      }
+    : null;
+
+  // Transition idempotente : seul le premier appel déclenche stock + email.
+  const { transitioned } = await markOrderPaid(orderId, shippingAddress);
+
+  if (typeof session.payment_intent === 'string') {
+    await attachPaymentIntent(orderId, session.payment_intent);
+  }
+
+  if (!transitioned) {
+    // Déjà traité (rejeu du webhook) : ne rien refaire.
+    return;
+  }
+
+  // Décrément du stock (best-effort : le paiement est déjà acquis).
+  const { issues } = await decrementStockForOrder(orderId);
+  if (issues.length > 0) {
+    console.error(`[webhook] Problèmes de stock pour la commande ${orderId}:`, issues);
+  }
+
+  // Email de confirmation.
+  const email = session.customer_details?.email ?? null;
+  const customerName = session.customer_details?.name ?? shipping?.name ?? undefined;
+  await sendOrderConfirmation(orderId, email, customerName);
+
+  // Vidage du panier de l'utilisateur connecté.
+  if (userId && userId !== 'guest') {
+    await clearUserCart(userId);
   }
 }
